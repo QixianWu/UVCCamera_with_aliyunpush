@@ -272,14 +272,14 @@ public class UVCCamera {
 		final List<Size> list = getSupportedSizeList();
 		for (final Size sz: list) {
 			if ((sz.width == mCurrentWidth)
-				|| (sz.height == mCurrentHeight)) {
+				&& (sz.height == mCurrentHeight)) {
 				result =sz;
 				break;
 			}
 		}
 		return result;
 	}
-	
+
 	/**
 	 * Set preview size and preview mode
 	 * @param width
@@ -298,7 +298,7 @@ public class UVCCamera {
 	public void setPreviewSize(final int width, final int height, final int frameFormat) {
 		setPreviewSize(width, height, DEFAULT_PREVIEW_MIN_FPS, DEFAULT_PREVIEW_MAX_FPS, frameFormat, mCurrentBandwidthFactor);
 	}
-	
+
 	/**
 	 * Set preview size and preview mode
 	 * @param width

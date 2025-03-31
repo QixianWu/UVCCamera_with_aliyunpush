@@ -59,10 +59,11 @@ class UvcCameraPlatform extends UvcCameraPlatformInterface {
   }
 
   @override
-  Future<int> openCamera(UvcCameraDevice device, UvcCameraResolutionPreset resolutionPreset) async {
+  Future<int> openCamera(UvcCameraDevice device, UvcCameraResolutionPreset resolutionPreset, int maxFps) async {
     final result = await _nativeMethodChannel.invokeMethod<int>('openCamera', {
       'deviceName': device.name,
       'resolutionPreset': resolutionPreset.name,
+      'maxFps': maxFps
     });
     if (result == null) {
       throw PlatformException(code: 'UNKNOWN', message: 'Unable to open camera for device: $device');
@@ -183,7 +184,7 @@ class UvcCameraPlatform extends UvcCameraPlatformInterface {
   Future<void> setPreviewMode(int cameraId, UvcCameraMode previewMode) async {
     await _nativeMethodChannel.invokeMethod<void>('setPreviewMode', {
       'cameraId': cameraId,
-      'previewMode': previewMode.toMap(),
+      'mode': previewMode.toMap(),
     });
   }
 
@@ -215,6 +216,16 @@ class UvcCameraPlatform extends UvcCameraPlatformInterface {
   @override
   Future<void> stopVideoRecording(int cameraId) async {
     await _nativeMethodChannel.invokeMethod<void>('stopVideoRecording', {'cameraId': cameraId});
+  }
+
+  @override
+  Future<void> startPush(int cameraId, String url) async {
+    await _nativeMethodChannel.invokeMethod<void>('startPush', {'cameraId': cameraId, 'url': url});
+  }
+
+  @override
+  Future<void> stopPush() async {
+    await _nativeMethodChannel.invokeMethod<void>('stopPush');
   }
 
   @override

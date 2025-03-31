@@ -72,6 +72,11 @@ import io.flutter.view.TextureRegistry;
         private static final String TAG = TextureRegistrySurfaceProducerCallback.class.getCanonicalName();
 
         @Override
+        public void onSurfaceCreated() {
+            Log.v(TAG, "onSurfaceCreated");
+        }
+
+        @Override
         public void onSurfaceDestroyed() {
             Log.v(TAG, "onSurfaceDestroyed");
 

@@ -156,9 +156,14 @@ import io.flutter.plugin.common.MethodChannel;
                     return;
                 }
 
+                var maxFps = call.<Integer>argument("maxFps");
+                if (maxFps == null) {
+                    maxFps = 60;
+                }
+
                 long cameraId;
                 try {
-                    cameraId = uvcCameraPlatform.openCamera(deviceName, desiredFrameArea);
+                    cameraId = uvcCameraPlatform.openCamera(deviceName, desiredFrameArea, maxFps);
                 } catch (final Exception e) {
                     result.error(e.getClass().getSimpleName(), e.getMessage(), null);
                     return;
@@ -391,12 +396,18 @@ import io.flutter.plugin.common.MethodChannel;
                     return;
                 }
 
+                var maxFps = (Integer) mode.get("maxFps");
+                if (maxFps == null) {
+                    maxFps = 60;
+                }
+
                 try {
                     uvcCameraPlatform.setPreviewSize(
                             cameraId,
                             frameWidth,
                             frameHeight,
-                            frameFormatValue
+                            frameFormatValue,
+                            maxFps
                     );
                 } catch (final Exception e) {
                     result.error(e.getClass().getSimpleName(), e.getMessage(), null);
@@ -440,13 +451,13 @@ import io.flutter.plugin.common.MethodChannel;
                     return;
                 }
 
-                final var frameWidth = (Integer)videoRecordingMode.get("frameWidth");
+                final var frameWidth = (Integer) videoRecordingMode.get("frameWidth");
                 if (frameWidth == null) {
                     result.error("InvalidArgument", "videoRecordingMode.frameWidth is required", null);
                     return;
                 }
 
-                final var frameHeight = (Integer)videoRecordingMode.get("frameHeight");
+                final var frameHeight = (Integer) videoRecordingMode.get("frameHeight");
                 if (frameHeight == null) {
                     result.error("InvalidArgument", "videoRecordingMode.frameHeight is required", null);
                     return;
@@ -475,6 +486,33 @@ import io.flutter.plugin.common.MethodChannel;
 
                 try {
                     uvcCameraPlatform.stopVideoRecording(cameraId);
+                } catch (final Exception e) {
+                    result.error(e.getClass().getSimpleName(), e.getMessage(), null);
+                    return;
+                }
+
+                result.success(null);
+            }
+            case "startPush" -> {
+                final var cameraId = call.<Integer>argument("cameraId");
+                final var url = call.<String>argument("url");
+                if (cameraId == null) {
+                    result.error("InvalidArgument", "cameraId is required", null);
+                    return;
+                }
+
+                try {
+                    uvcCameraPlatform.startPush(cameraId, url);
+                } catch (final Exception e) {
+                    result.error(e.getClass().getSimpleName(), e.getMessage(), null);
+                    return;
+                }
+
+                result.success(null);
+            }
+            case "stopPush" -> {
+                try {
+                    uvcCameraPlatform.stopPush();
                 } catch (final Exception e) {
                     result.error(e.getClass().getSimpleName(), e.getMessage(), null);
                     return;

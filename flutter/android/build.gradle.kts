@@ -25,6 +25,13 @@ android {
 
 dependencies {
     implementation("androidx.annotation:annotation:1.9.1")
+    implementation("com.aliyun.aio:AliVCSDK_InteractiveLive:7.0.0") {
+        repositories {
+            maven {
+                url = uri("https://maven.aliyun.com/nexus/content/repositories/releases")
+            }
+        }
+    }
     implementation("org.uvccamera:lib:$version") // NOTE: Use org.uvccamera:lib of the same version as the plugin.
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.mockito:mockito-core:5.0.0")

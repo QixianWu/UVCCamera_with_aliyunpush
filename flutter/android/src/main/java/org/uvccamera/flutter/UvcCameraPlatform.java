@@ -1,11 +1,14 @@
 package org.uvccamera.flutter;
 
+import static com.serenegiant.usb.UVCCamera.DEFAULT_BANDWIDTH;
+
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.ImageFormat;
 import android.graphics.Rect;
 import android.graphics.YuvImage;
 import android.hardware.usb.UsbDevice;
+import android.media.MediaCodec;
 import android.media.MediaRecorder;
 import android.os.Handler;
 import android.os.Looper;
@@ -14,9 +17,12 @@ import android.util.Pair;
 
 import androidx.annotation.NonNull;
 
+import com.alivc.live.pusher.AlivcLivePusher;
 import com.serenegiant.usb.Size;
 import com.serenegiant.usb.USBMonitor;
 import com.serenegiant.usb.UVCCamera;
+
+import org.uvccamera.flutter.livepush.LivePushPlugin;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -113,6 +119,10 @@ import io.flutter.view.TextureRegistry;
      */
     private final Map<Integer, UvcCameraResources> camerasResources = new ConcurrentHashMap<>();
 
+    private final LivePushPlugin livePushPlugin;
+
+    private VideoCodec videoCodec;
+
     /**
      * Constructs a new {@link UvcCameraPlatform} instance
      *
@@ -124,12 +134,14 @@ import io.flutter.view.TextureRegistry;
             final @NonNull Context applicationContext,
             final @NonNull BinaryMessenger binaryMessenger,
             final @NonNull TextureRegistry textureRegistry,
-            final @NonNull UvcCameraDeviceEventStreamHandler deviceEventStreamHandler
+            final @NonNull UvcCameraDeviceEventStreamHandler deviceEventStreamHandler,
+            final @NonNull LivePushPlugin livePushPlugin
     ) {
         this.applicationContext = new WeakReference<>(applicationContext);
         this.binaryMessenger = new WeakReference<>(binaryMessenger);
         this.textureRegistry = textureRegistry;
         this.deviceEventStreamHandler = deviceEventStreamHandler;
+        this.livePushPlugin = livePushPlugin;
 
         usbMonitor = new USBMonitor(applicationContext, new UvcCameraDeviceMonitorListener(this));
         usbMonitor.register();
@@ -370,9 +382,10 @@ import io.flutter.view.TextureRegistry;
      *
      * @param deviceName       the name of the UVC camera device
      * @param desiredFrameArea the desired frame area
+     * @param maxFps           the maximum frame rate
      * @return camera ID
      */
-    public int openCamera(final @NonNull String deviceName, final int desiredFrameArea) {
+    public int openCamera(final @NonNull String deviceName, final int desiredFrameArea, final int maxFps) {
         Log.v(TAG, "openCamera: deviceName=" + deviceName + ", desiredFrameArea=" + desiredFrameArea);
 
         final var device = findDeviceByName(deviceName);
@@ -394,6 +407,8 @@ import io.flutter.view.TextureRegistry;
         Log.d(TAG, "openCamera: opening camera");
         try {
             camera.open(deviceCtrlBlock);
+            // 开启自动对焦
+            camera.setAutoFocus(true);
         } catch (final Exception e) {
             camera.destroy();
             throw new IllegalStateException("Failed to open camera", e);
@@ -453,7 +468,10 @@ import io.flutter.view.TextureRegistry;
                 camera.setPreviewSize(
                         desiredFrameSize.width,
                         desiredFrameSize.height,
-                        desiredFrameFormat
+                        1,
+                        maxFps,
+                        desiredFrameFormat,
+                        UVCCamera.DEFAULT_BANDWIDTH
                 );
                 frameFormat = desiredFrameFormat;
                 break;
@@ -922,13 +940,15 @@ import io.flutter.view.TextureRegistry;
             final int cameraId,
             final int frameWidth,
             final int frameHeight,
-            final int frameFormat
+            final int frameFormat,
+            final int maxFps
     ) {
         Log.v(TAG, "setPreviewSize"
                 + ": cameraId=" + cameraId
                 + ", frameWidth=" + frameWidth
                 + ", frameHeight=" + frameHeight
                 + ", frameFormat=" + frameFormat
+                + ", maxFps=" + maxFps
         );
 
         final var cameraResources = camerasResources.get(cameraId);
@@ -939,7 +959,10 @@ import io.flutter.view.TextureRegistry;
         cameraResources.camera().setPreviewSize(
                 frameWidth,
                 frameHeight,
-                frameFormat == 4 ? UVCCamera.FRAME_FORMAT_YUYV : UVCCamera.FRAME_FORMAT_MJPEG
+                1,
+                maxFps,
+                frameFormat == 4 ? UVCCamera.FRAME_FORMAT_YUYV : UVCCamera.FRAME_FORMAT_MJPEG,
+                UVCCamera.DEFAULT_BANDWIDTH
         );
     }
 
@@ -1019,11 +1042,10 @@ import io.flutter.view.TextureRegistry;
         mainLooperHandler.post(() -> {
             // Detach the frame callback
             cameraResources.camera().setFrameCallback(null, 0);
-
             try {
                 saveTakenPictureToFile(cameraId, outputFile, frameData);
                 resultHandler.onResult(outputFile, null);
-            } catch(final Exception e) {
+            } catch (final Exception e) {
                 Log.e(TAG, "Failed to save taken picture to file", e);
                 resultHandler.onResult(null, e);
             }
@@ -1182,4 +1204,25 @@ import io.flutter.view.TextureRegistry;
         return null;
     }
 
+    public void startPush(final int cameraId, final String pushUrl) {
+        final var cameraResources = camerasResources.get(cameraId);
+        if (cameraResources == null) {
+            throw new IllegalArgumentException("Camera resources not found: " + cameraId);
+        }
+
+        AlivcLivePusher alivcLivePusher = livePushPlugin.getLivePusher().getAlivcLivePusher();
+        UVCCamera camera = cameraResources.camera();
+
+        videoCodec = new VideoCodec(applicationContext.get(), camera, alivcLivePusher);
+        videoCodec.startEncoding();
+
+        alivcLivePusher.startPush(pushUrl);
+    }
+
+    public void stopPush() {
+        AlivcLivePusher alivcLivePusher = livePushPlugin.getLivePusher().getAlivcLivePusher();
+
+        alivcLivePusher.stopPush();
+        videoCodec.stopEncoding();
+    }
 }

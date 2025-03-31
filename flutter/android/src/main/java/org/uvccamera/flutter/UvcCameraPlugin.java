@@ -4,6 +4,8 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 
+import org.uvccamera.flutter.livepush.LivePushPlugin;
+
 import io.flutter.embedding.engine.plugins.FlutterPlugin;
 import io.flutter.embedding.engine.plugins.activity.ActivityAware;
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding;
@@ -35,6 +37,8 @@ public class UvcCameraPlugin implements FlutterPlugin, ActivityAware {
      */
     private UvcCameraPlatform uvcCameraPlatform;
 
+    private LivePushPlugin livePushPlugin;
+
     @Override
     public void onAttachedToEngine(@NonNull FlutterPluginBinding flutterPluginBinding) {
         Log.v(TAG, "onAttachedToEngine");
@@ -48,15 +52,21 @@ public class UvcCameraPlugin implements FlutterPlugin, ActivityAware {
 
         final var deviceEventChannelStreamHandler = new UvcCameraDeviceEventStreamHandler();
 
+        /// 注册推流插件
+        livePushPlugin = new LivePushPlugin();
+        livePushPlugin.onAttachedToEngine(flutterPluginBinding);
+
         uvcCameraPlatform = new UvcCameraPlatform(
                 applicationContext,
                 binaryMessenger,
                 textureRegistry,
-                deviceEventChannelStreamHandler
+                deviceEventChannelStreamHandler,
+                livePushPlugin
         );
 
         nativeMethodChannel.setMethodCallHandler(new UvcCameraNativeMethodCallHandler(uvcCameraPlatform));
         deviceEventChannel.setStreamHandler(deviceEventChannelStreamHandler);
+
     }
 
     @Override
@@ -96,6 +106,10 @@ public class UvcCameraPlugin implements FlutterPlugin, ActivityAware {
         if (nativeMethodChannel != null) {
             nativeMethodChannel.setMethodCallHandler(null);
             nativeMethodChannel = null;
+        }
+
+        if(livePushPlugin != null){
+            livePushPlugin.onDetachedFromEngine(flutterPluginBinding);
         }
     }
 

@@ -24,6 +24,8 @@ class UvcCameraController extends ValueNotifier<UvcCameraControllerState> {
   /// The resolution preset requested for the camera.
   final UvcCameraResolutionPreset resolutionPreset;
 
+  final int maxFps;
+
   bool _isDisposed = false;
   Future<void>? _initializeFuture;
 
@@ -43,8 +45,8 @@ class UvcCameraController extends ValueNotifier<UvcCameraControllerState> {
   Stream<UvcCameraButtonEvent>? _cameraButtonEventStream;
 
   /// Creates a new [UvcCameraController] object.
-  UvcCameraController({required this.device, this.resolutionPreset = UvcCameraResolutionPreset.max})
-    : super(UvcCameraControllerState.uninitialized(device));
+  UvcCameraController({required this.device, this.resolutionPreset = UvcCameraResolutionPreset.max, this.maxFps = 30})
+      : super(UvcCameraControllerState.uninitialized(device));
 
   /// Initializes the controller on the device.
   Future<void> initialize() => _initialize(device);
@@ -62,7 +64,7 @@ class UvcCameraController extends ValueNotifier<UvcCameraControllerState> {
     _initializeFuture = initializeCompleter.future;
 
     try {
-      _cameraId = await UvcCameraPlatformInterface.instance.openCamera(device, resolutionPreset);
+      _cameraId = await UvcCameraPlatformInterface.instance.openCamera(device, resolutionPreset, maxFps);
 
       _textureId = await UvcCameraPlatformInterface.instance.getCameraTextureId(_cameraId!);
       final previewMode = await UvcCameraPlatformInterface.instance.getPreviewMode(_cameraId!);
@@ -152,6 +154,16 @@ class UvcCameraController extends ValueNotifier<UvcCameraControllerState> {
     return _cameraButtonEventStream!;
   }
 
+  Future<void> setPreviewMode(UvcCameraMode previewMode) async {
+    _ensureInitializedNotDisposed();
+
+    await UvcCameraPlatformInterface.instance.setPreviewMode(cameraId, previewMode);
+  }
+
+  Future<UvcCameraMode> getPreviewSize() async {
+    return UvcCameraPlatformInterface.instance.getPreviewMode(cameraId);
+  }
+
   /// Takes a picture.
   Future<XFile> takePicture() async {
     _ensureInitializedNotDisposed();
@@ -196,6 +208,18 @@ class UvcCameraController extends ValueNotifier<UvcCameraControllerState> {
     value = value.copyWith(isRecordingVideo: false, videoRecordingMode: null, videoRecordingFile: null);
 
     return videoRecordingFile;
+  }
+
+  Future<void> startPush(String url) async {
+    _ensureInitializedNotDisposed();
+
+    await UvcCameraPlatformInterface.instance.startPush(_cameraId!, url);
+  }
+
+  Future<void> stopPush() async {
+    _ensureInitializedNotDisposed();
+
+    await UvcCameraPlatformInterface.instance.stopPush();
   }
 
   /// Returns a widget showing a live camera preview.

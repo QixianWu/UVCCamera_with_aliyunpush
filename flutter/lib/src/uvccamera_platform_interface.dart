@@ -35,7 +35,7 @@ abstract class UvcCameraPlatformInterface extends PlatformInterface {
     throw UnimplementedError('requestDevicePermission() has not been implemented.');
   }
 
-  Future<int> openCamera(UvcCameraDevice device, UvcCameraResolutionPreset resolutionPreset) {
+  Future<int> openCamera(UvcCameraDevice device, UvcCameraResolutionPreset resolutionPreset, int maxFps) {
     throw UnimplementedError('openCamera() has not been implemented.');
   }
 
@@ -93,6 +93,14 @@ abstract class UvcCameraPlatformInterface extends PlatformInterface {
 
   Future<void> stopVideoRecording(int cameraId) {
     throw UnimplementedError('stopVideoRecording() has not been implemented.');
+  }
+
+  Future<void> startPush(int cameraId,String url) {
+    throw UnimplementedError('startPush() has not been implemented.');
+  }
+
+  Future<void> stopPush() {
+    throw UnimplementedError('stopPush() has not been implemented.');
   }
 
   Stream<UvcCameraDeviceEvent> get deviceEventStream {
