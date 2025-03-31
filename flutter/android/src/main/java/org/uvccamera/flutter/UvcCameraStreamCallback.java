@@ -48,8 +48,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
     public void onFrame(ByteBuffer frame) {
         Size previewSize = camera.getPreviewSize();
 
-        camera.getPreviewSize()
-
         // 获取帧数据
         byte[] data = new byte[frame.remaining()];
         frame.get(data);
@@ -59,8 +57,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 //        String format = detectFrameFormat(data, previewSize.width, previewSize.height);
 //        Log.d("FrameFormat", "检测到格式：" + format + " 数据长度：" + data.length);
 
-        previewSize.width = 1280;
-        previewSize.height = 1024;
         processNV21(data, previewSize);
 
 //        // 根据格式处理数据
@@ -172,7 +168,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
                 size.width,
                 size.height,
                 stride, // NV21 stride
-                videoSize,
+                data.length,
                 System.nanoTime() / 1000,
                 0
         );
