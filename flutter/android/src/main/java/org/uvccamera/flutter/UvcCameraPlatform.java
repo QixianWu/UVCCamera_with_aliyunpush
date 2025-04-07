@@ -122,6 +122,7 @@ import io.flutter.view.TextureRegistry;
     private final LivePushPlugin livePushPlugin;
 
     private VideoCodec videoCodec;
+//    private VideoCodec_bak videoCodec_bak;
 
     /**
      * Constructs a new {@link UvcCameraPlatform} instance
@@ -429,7 +430,9 @@ import io.flutter.view.TextureRegistry;
             final var areaDelta = size.width * size.height - desiredFrameArea;
             supportedSizesWithAreaDelta.add(new Pair<>(size, areaDelta));
         }
-        Collections.sort(supportedSizesWithAreaDelta, (l, r) -> Integer.compare(r.second, l.second));
+        // 修改排序逻辑，按照面积差值的绝对值从小到大排序
+        Collections.sort(supportedSizesWithAreaDelta, (l, r) -> Integer.compare(Math.abs(l.second), Math.abs(r.second)));
+//        Collections.sort(supportedSizesWithAreaDelta, (l, r) -> Integer.compare(r.second, l.second));
         final var desiredFrameSize = supportedSizesWithAreaDelta.get(0).first;
         Log.d(TAG, "openCamera: best size found: " + desiredFrameSize);
 
@@ -1216,6 +1219,9 @@ import io.flutter.view.TextureRegistry;
         videoCodec = new VideoCodec(applicationContext.get(), camera, alivcLivePusher);
         videoCodec.startEncoding();
 
+//        videoCodec_bak = new VideoCodec_bak(applicationContext.get(), camera, alivcLivePusher);
+//        videoCodec_bak.startEncoding();
+
         alivcLivePusher.startPush(pushUrl);
     }
 
@@ -1224,5 +1230,6 @@ import io.flutter.view.TextureRegistry;
 
         alivcLivePusher.stopPush();
         videoCodec.stopEncoding();
+//        videoCodec_bak.stopEncoding();
     }
 }

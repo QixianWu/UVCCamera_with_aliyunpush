@@ -33,6 +33,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
     // 帧率控制变量
     private int maxFps = 30;
 
+        // 添加帧率统计变量
+        private long frameCount = 0;
+        private long lastFpsLogTime = 0;
+        private static final long FPS_LOG_INTERVAL = 1000; // 每秒记录一次
+
     final YUVRecorder recorder;
 
     UvcCameraStreamCallback(Context context, UVCCamera camera, AlivcLivePusher alivcLivePusher) {
@@ -46,6 +51,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
     @Override
     public void onFrame(ByteBuffer frame) {
+        // 帧率不足 只能应付下
         Size previewSize = camera.getPreviewSize();
 
         // 获取帧数据
@@ -143,6 +149,16 @@ import java.util.concurrent.atomic.AtomicBoolean;
 //        byte[] yuv420p = new byte[data.length];
 //
 //        NV21_TO_yuv420P(yuv420p, data, size.width, size.height);
+
+ // 帧率统计
+ frameCount++;
+ long currentTime = System.currentTimeMillis();
+ if (currentTime - lastFpsLogTime >= FPS_LOG_INTERVAL) {
+     float fps = frameCount * 1000.0f / (currentTime - lastFpsLogTime);
+     Log.i(TAG, "processNV21 FPS: " + fps + " frames/sec");
+     frameCount = 0;
+     lastFpsLogTime = currentTime;
+ }
 
         Log.i(TAG, "processNV21: "+size.width + " "+size.height);
 

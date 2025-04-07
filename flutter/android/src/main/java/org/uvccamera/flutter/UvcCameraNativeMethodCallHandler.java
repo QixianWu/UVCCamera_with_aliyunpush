@@ -50,7 +50,7 @@ import io.flutter.plugin.common.MethodChannel;
      * Resolution preset to frame area mapping.
      */
     private static final Map<String, Integer> RESOLUTION_PRESET_TO_FRAME_AREA = Map.of(
-            "min", Integer.MIN_VALUE,
+            "min", 0,
             "low", 640 * 480,
             "medium", 1280 * 720,
             "high", 1920 * 1080,
