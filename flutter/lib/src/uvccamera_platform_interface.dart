@@ -35,7 +35,7 @@ abstract class UvcCameraPlatformInterface extends PlatformInterface {
     throw UnimplementedError('requestDevicePermission() has not been implemented.');
   }
 
-  Future<int> openCamera(UvcCameraDevice device, UvcCameraResolutionPreset resolutionPreset, int maxFps) {
+  Future<int> openCamera(UvcCameraDevice device, UvcCameraResolutionPreset resolutionPreset,UvcCameraMode? mode) {
     throw UnimplementedError('openCamera() has not been implemented.');
   }
 

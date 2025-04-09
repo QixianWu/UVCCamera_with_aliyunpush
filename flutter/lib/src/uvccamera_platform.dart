@@ -59,11 +59,11 @@ class UvcCameraPlatform extends UvcCameraPlatformInterface {
   }
 
   @override
-  Future<int> openCamera(UvcCameraDevice device, UvcCameraResolutionPreset resolutionPreset, int maxFps) async {
+  Future<int> openCamera(UvcCameraDevice device, UvcCameraResolutionPreset resolutionPreset,UvcCameraMode? mode) async {
     final result = await _nativeMethodChannel.invokeMethod<int>('openCamera', {
       'deviceName': device.name,
       'resolutionPreset': resolutionPreset.name,
-      'maxFps': maxFps
+      'mode': mode?.toMap(),
     });
     if (result == null) {
       throw PlatformException(code: 'UNKNOWN', message: 'Unable to open camera for device: $device');
@@ -182,9 +182,11 @@ class UvcCameraPlatform extends UvcCameraPlatformInterface {
 
   @override
   Future<void> setPreviewMode(int cameraId, UvcCameraMode previewMode) async {
+
+    Map<String, dynamic> mode = previewMode.toMap();
     await _nativeMethodChannel.invokeMethod<void>('setPreviewMode', {
       'cameraId': cameraId,
-      'mode': previewMode.toMap(),
+      'mode': mode,
     });
   }
 

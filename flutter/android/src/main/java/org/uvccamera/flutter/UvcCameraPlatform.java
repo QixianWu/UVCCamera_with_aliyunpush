@@ -16,6 +16,7 @@ import android.util.Log;
 import android.util.Pair;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import com.alivc.live.pusher.AlivcLivePusher;
 import com.serenegiant.usb.Size;
@@ -386,7 +387,7 @@ import io.flutter.view.TextureRegistry;
      * @param maxFps           the maximum frame rate
      * @return camera ID
      */
-    public int openCamera(final @NonNull String deviceName, final int desiredFrameArea, final int maxFps) {
+    public int openCamera(final @NonNull String deviceName, final int desiredFrameArea,@Nullable Integer maxFps) {
         Log.v(TAG, "openCamera: deviceName=" + deviceName + ", desiredFrameArea=" + desiredFrameArea);
 
         final var device = findDeviceByName(deviceName);
@@ -463,6 +464,10 @@ import io.flutter.view.TextureRegistry;
             throw new IllegalStateException("Failed to set button callback", e);
         }
 
+        if(maxFps == null){
+            maxFps = (int) desiredFrameSize.fps[desiredFrameSize.frameIntervalIndex];
+        }
+
         // Set the preview size and the frame format
         Log.d(TAG, "openCamera: setting preview size and frame format");
         Integer frameFormat = null;
@@ -471,7 +476,7 @@ import io.flutter.view.TextureRegistry;
                 camera.setPreviewSize(
                         desiredFrameSize.width,
                         desiredFrameSize.height,
-                        1,
+                        UVCCamera.DEFAULT_PREVIEW_MIN_FPS,
                         maxFps,
                         desiredFrameFormat,
                         UVCCamera.DEFAULT_BANDWIDTH
@@ -962,7 +967,7 @@ import io.flutter.view.TextureRegistry;
         cameraResources.camera().setPreviewSize(
                 frameWidth,
                 frameHeight,
-                1,
+                UVCCamera.DEFAULT_PREVIEW_MIN_FPS,
                 maxFps,
                 frameFormat == 4 ? UVCCamera.FRAME_FORMAT_YUYV : UVCCamera.FRAME_FORMAT_MJPEG,
                 UVCCamera.DEFAULT_BANDWIDTH

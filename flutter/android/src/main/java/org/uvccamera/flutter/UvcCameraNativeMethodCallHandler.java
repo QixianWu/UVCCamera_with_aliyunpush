@@ -8,9 +8,11 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 
 import com.serenegiant.usb.Size;
+import com.serenegiant.usb.UVCCamera;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -150,15 +152,25 @@ import io.flutter.plugin.common.MethodChannel;
                     return;
                 }
 
-                final var desiredFrameArea = RESOLUTION_PRESET_TO_FRAME_AREA.get(resolutionPreset);
+                var desiredFrameArea = RESOLUTION_PRESET_TO_FRAME_AREA.get(resolutionPreset);
                 if (desiredFrameArea == null) {
                     result.error("InvalidArgument", "Unknown resolutionPreset: " + resolutionPreset, null);
                     return;
                 }
 
-                var maxFps = call.<Integer>argument("maxFps");
-                if (maxFps == null) {
-                    maxFps = 60;
+                final var mode = call.<Map<String, Object>>argument("mode");
+                Integer maxFps = null;
+                if(mode != null){
+                    try {
+                        int width = (Integer) mode.get("frameWidth");
+                        int height = (Integer) mode.get("frameHeight");
+                        List<Double> fpsList = (List<Double>) mode.get("fps");
+                        int frameIntervalIndex = (Integer) mode.get("frameIntervalIndex");
+                        desiredFrameArea = width * height;
+                        maxFps = fpsList.get(frameIntervalIndex).intValue();
+                    }catch (Exception e){
+                        e.printStackTrace();
+                    }
                 }
 
                 long cameraId;
@@ -327,6 +339,15 @@ import io.flutter.plugin.common.MethodChannel;
                     mode.put("frameWidth", size.width);
                     mode.put("frameHeight", size.height);
                     mode.put("frameFormat", frameFormatEnumName);
+                    mode.put("frameIntervalType",size.frameIntervalType);
+                    mode.put("frameIntervalIndex",size.frameIntervalIndex);
+
+                    List<Double> doubleList = new ArrayList<>();
+                    for (float f : size.fps) {
+                        doubleList.add((double) f);  // 强制转换为 Double
+                    }
+                    mode.put("fps", doubleList);
+
                     modes.add(mode);
                 }
 
@@ -357,6 +378,15 @@ import io.flutter.plugin.common.MethodChannel;
                 mode.put("frameWidth", previewSize.width);
                 mode.put("frameHeight", previewSize.height);
                 mode.put("frameFormat", frameFormatEnumName);
+                mode.put("frameIntervalType",previewSize.frameIntervalType);
+                mode.put("frameIntervalIndex",previewSize.frameIntervalIndex);
+
+                List<Double> doubleList = new ArrayList<>();
+                for (float f : previewSize.fps) {
+                    doubleList.add((double) f);  // 强制转换为 Double
+                }
+                mode.put("fps", doubleList);
+
                 result.success(mode);
             }
             case "setPreviewMode" -> {
@@ -396,9 +426,17 @@ import io.flutter.plugin.common.MethodChannel;
                     return;
                 }
 
-                var maxFps = (Integer) mode.get("maxFps");
+
+                Integer maxFps = null;
+                try {
+                    List<Double> fpsList = (List<Double>) mode.get("fps");
+                    int frameIntervalIndex = (Integer) mode.get("frameIntervalIndex");
+                    maxFps = fpsList.get(frameIntervalIndex).intValue();
+                }catch (Exception e){
+                    e.printStackTrace();
+                }
                 if (maxFps == null) {
-                    maxFps = 60;
+                    maxFps = UVCCamera.DEFAULT_PREVIEW_MAX_FPS;
                 }
 
                 try {

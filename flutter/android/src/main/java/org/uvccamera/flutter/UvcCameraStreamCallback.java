@@ -33,25 +33,24 @@ import java.util.concurrent.atomic.AtomicBoolean;
     // 帧率控制变量
     private int maxFps = 30;
 
-        // 添加帧率统计变量
-        private long frameCount = 0;
-        private long lastFpsLogTime = 0;
-        private static final long FPS_LOG_INTERVAL = 1000; // 每秒记录一次
+    // 添加帧率统计变量
+    private long frameCount = 0;
+    private long lastFpsLogTime = 0;
+    private static final long FPS_LOG_INTERVAL = 1000; // 每秒记录一次
 
-    final YUVRecorder recorder;
+//    final YUVRecorder recorder;
 
     UvcCameraStreamCallback(Context context, UVCCamera camera, AlivcLivePusher alivcLivePusher) {
         this.context = context;
         this.camera = camera;
         this.alivcLivePusher = alivcLivePusher;
 
-        this.recorder = new YUVRecorder(context, "output.yuv");
+//        this.recorder = new YUVRecorder(context, "output.yuv");
 
     }
 
     @Override
     public void onFrame(ByteBuffer frame) {
-        // 帧率不足 只能应付下
         Size previewSize = camera.getPreviewSize();
 
         // 获取帧数据
@@ -144,40 +143,17 @@ import java.util.concurrent.atomic.AtomicBoolean;
     // 各格式处理方法
     private void processNV21(byte[] data, Size size) {
 
-//        byte[] yuv420p = nv21ToYuv420p2(data, size.width, size.height);
-//
-//        byte[] yuv420p = new byte[data.length];
-//
-//        NV21_TO_yuv420P(yuv420p, data, size.width, size.height);
+        // 帧率统计
+        frameCount++;
+        long currentTime = System.currentTimeMillis();
+        if (currentTime - lastFpsLogTime >= FPS_LOG_INTERVAL) {
+            float fps = frameCount * 1000.0f / (currentTime - lastFpsLogTime);
+            Log.i(TAG, "processNV21 FPS: " + fps + " frames/sec");
+            frameCount = 0;
+            lastFpsLogTime = currentTime;
+        }
 
- // 帧率统计
- frameCount++;
- long currentTime = System.currentTimeMillis();
- if (currentTime - lastFpsLogTime >= FPS_LOG_INTERVAL) {
-     float fps = frameCount * 1000.0f / (currentTime - lastFpsLogTime);
-     Log.i(TAG, "processNV21 FPS: " + fps + " frames/sec");
-     frameCount = 0;
-     lastFpsLogTime = currentTime;
- }
-
-        Log.i(TAG, "processNV21: "+size.width + " "+size.height);
-
-//        int stride = (size.width + 15) / 16 * 16;
-
-            int stride = size.width;
-            int videoSize = size.width * size.height * 3 / 2;
-
-
-//        recorder.addFrame(data);
-
-
-//        byte[] nv21;
-//
-//        if (stride != size.width) {
-//            nv21 =  alignNV21(data, size.width, size.height, stride);
-//        }else{
-//            nv21 = data;
-//        }
+        int stride = size.width;
 
         alivcLivePusher.inputStreamVideoData(
                 data,
@@ -203,12 +179,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
     }
 
     public static byte[] alignNV21(byte[] nv21, int width, int height, int stride) {
-        int sliceHeight = height +304 ; // 由于无法获取 sliceHeight，先假设等于 height
+        int sliceHeight = height + 304; // 由于无法获取 sliceHeight，先假设等于 height
 
         if (stride == width) {
             return nv21; // 无需调整
         }
-
 
 
         int ySize = width * height;

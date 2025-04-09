@@ -24,7 +24,7 @@ class UvcCameraController extends ValueNotifier<UvcCameraControllerState> {
   /// The resolution preset requested for the camera.
   final UvcCameraResolutionPreset resolutionPreset;
 
-  final int maxFps;
+  final UvcCameraMode? uvcCameraMode;
 
   bool _isDisposed = false;
   Future<void>? _initializeFuture;
@@ -45,7 +45,7 @@ class UvcCameraController extends ValueNotifier<UvcCameraControllerState> {
   Stream<UvcCameraButtonEvent>? _cameraButtonEventStream;
 
   /// Creates a new [UvcCameraController] object.
-  UvcCameraController({required this.device, this.resolutionPreset = UvcCameraResolutionPreset.max, this.maxFps = 30})
+  UvcCameraController({required this.device, this.resolutionPreset = UvcCameraResolutionPreset.max, this.uvcCameraMode})
       : super(UvcCameraControllerState.uninitialized(device));
 
   /// Initializes the controller on the device.
@@ -64,7 +64,7 @@ class UvcCameraController extends ValueNotifier<UvcCameraControllerState> {
     _initializeFuture = initializeCompleter.future;
 
     try {
-      _cameraId = await UvcCameraPlatformInterface.instance.openCamera(device, resolutionPreset, maxFps);
+      _cameraId = await UvcCameraPlatformInterface.instance.openCamera(device, resolutionPreset, uvcCameraMode);
 
       _textureId = await UvcCameraPlatformInterface.instance.getCameraTextureId(_cameraId!);
       final previewMode = await UvcCameraPlatformInterface.instance.getPreviewMode(_cameraId!);
@@ -162,6 +162,10 @@ class UvcCameraController extends ValueNotifier<UvcCameraControllerState> {
 
   Future<UvcCameraMode> getPreviewSize() async {
     return UvcCameraPlatformInterface.instance.getPreviewMode(cameraId);
+  }
+
+  Future<List<UvcCameraMode>> getSupportedModes() async {
+    return UvcCameraPlatformInterface.instance.getSupportedModes(cameraId);
   }
 
   /// Takes a picture.
