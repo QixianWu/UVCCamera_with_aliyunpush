@@ -9,6 +9,7 @@ import 'uvccamera_mode.dart';
 import 'uvccamera_platform_interface.dart';
 import 'uvccamera_resolution_preset.dart';
 import 'uvccamera_status_event.dart';
+import 'uvccamera_rtmp_event.dart';
 
 class UvcCameraPlatform extends UvcCameraPlatformInterface {
   final _nativeMethodChannel = const MethodChannel('uvccamera/native');
@@ -24,6 +25,9 @@ class UvcCameraPlatform extends UvcCameraPlatformInterface {
 
   final Map<int, EventChannel> _buttonEventChannels = {};
   final Map<int, Stream<UvcCameraButtonEvent>> _buttonEventStreams = {};
+
+  final EventChannel _rtmpEventChannel = EventChannel('uvccamera/rtmp_events');
+  Stream<UvcCameraRtmpEvent>? _rtmpEventStream;
 
   @override
   Future<bool> isSupported() async {
@@ -234,6 +238,13 @@ class UvcCameraPlatform extends UvcCameraPlatformInterface {
   Stream<UvcCameraDeviceEvent> get deviceEventStream {
     return _deviceEventStream ??= _deviceEventChannel.receiveBroadcastStream().map((event) {
       return UvcCameraDeviceEvent.fromMap(event);
+    });
+  }
+
+  @override
+  Stream<UvcCameraRtmpEvent> get rtmpEventStream {
+    return _rtmpEventStream ??= _rtmpEventChannel.receiveBroadcastStream().map((event) {
+      return UvcCameraRtmpEvent.fromMap(event);
     });
   }
 }

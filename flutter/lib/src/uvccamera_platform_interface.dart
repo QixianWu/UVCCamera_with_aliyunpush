@@ -9,6 +9,7 @@ import 'uvccamera_platform.dart';
 import 'uvccamera_mode.dart';
 import 'uvccamera_resolution_preset.dart';
 import 'uvccamera_status_event.dart';
+import 'uvccamera_rtmp_event.dart';
 
 abstract class UvcCameraPlatformInterface extends PlatformInterface {
   UvcCameraPlatformInterface() : super(token: _token);
@@ -105,5 +106,9 @@ abstract class UvcCameraPlatformInterface extends PlatformInterface {
 
   Stream<UvcCameraDeviceEvent> get deviceEventStream {
     throw UnimplementedError('deviceEventStream has not been implemented.');
+  }
+  
+  Stream<UvcCameraRtmpEvent> get rtmpEventStream {
+    throw UnimplementedError('rtmpEventStream has not been implemented.');
   }
 }

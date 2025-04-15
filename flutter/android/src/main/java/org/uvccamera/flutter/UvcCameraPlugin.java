@@ -4,8 +4,6 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 
-import org.uvccamera.flutter.livepush.LivePushPlugin;
-
 import io.flutter.embedding.engine.plugins.FlutterPlugin;
 import io.flutter.embedding.engine.plugins.activity.ActivityAware;
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding;
@@ -37,11 +35,18 @@ public class UvcCameraPlugin implements FlutterPlugin, ActivityAware {
      */
     private UvcCameraPlatform uvcCameraPlatform;
 
-    private LivePushPlugin livePushPlugin;
+    private static UvcCameraPlugin instance;
+
+    // 添加获取实例的静态方法
+    public static UvcCameraPlugin getInstance() {
+        return instance;
+    }
 
     @Override
     public void onAttachedToEngine(@NonNull FlutterPluginBinding flutterPluginBinding) {
         Log.v(TAG, "onAttachedToEngine");
+
+        instance = this;
 
         final var applicationContext = flutterPluginBinding.getApplicationContext();
         final var binaryMessenger = flutterPluginBinding.getBinaryMessenger();
@@ -52,16 +57,11 @@ public class UvcCameraPlugin implements FlutterPlugin, ActivityAware {
 
         final var deviceEventChannelStreamHandler = new UvcCameraDeviceEventStreamHandler();
 
-        /// 注册推流插件
-        livePushPlugin = new LivePushPlugin();
-        livePushPlugin.onAttachedToEngine(flutterPluginBinding);
-
         uvcCameraPlatform = new UvcCameraPlatform(
                 applicationContext,
                 binaryMessenger,
                 textureRegistry,
-                deviceEventChannelStreamHandler,
-                livePushPlugin
+                deviceEventChannelStreamHandler
         );
 
         nativeMethodChannel.setMethodCallHandler(new UvcCameraNativeMethodCallHandler(uvcCameraPlatform));
@@ -93,6 +93,8 @@ public class UvcCameraPlugin implements FlutterPlugin, ActivityAware {
     public void onDetachedFromEngine(@NonNull FlutterPluginBinding flutterPluginBinding) {
         Log.v(TAG, "onDetachedFromEngine");
 
+        instance = null;
+
         if (uvcCameraPlatform != null) {
             uvcCameraPlatform.release();
             uvcCameraPlatform = null;
@@ -108,9 +110,11 @@ public class UvcCameraPlugin implements FlutterPlugin, ActivityAware {
             nativeMethodChannel = null;
         }
 
-        if(livePushPlugin != null){
-            livePushPlugin.onDetachedFromEngine(flutterPluginBinding);
-        }
+    }
+
+    // 添加获取UvcCameraPlatform的方法
+    public UvcCameraPlatform getUvcCameraPlatform() {
+        return uvcCameraPlatform;
     }
 
 }

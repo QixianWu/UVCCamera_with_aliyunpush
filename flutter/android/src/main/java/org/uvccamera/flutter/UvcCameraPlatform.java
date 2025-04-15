@@ -18,12 +18,14 @@ import android.util.Pair;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import com.alivc.live.pusher.AlivcLivePusher;
+import com.pedro.encoder.input.sources.audio.NoAudioSource;
+import com.pedro.encoder.input.sources.video.Camera2Source;
+import com.pedro.common.ConnectChecker;
+import com.pedro.library.rtmp.RtmpStream;
+import com.pedro.library.util.FpsListener;
 import com.serenegiant.usb.Size;
 import com.serenegiant.usb.USBMonitor;
 import com.serenegiant.usb.UVCCamera;
-
-import org.uvccamera.flutter.livepush.LivePushPlugin;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -43,7 +45,7 @@ import io.flutter.view.TextureRegistry;
 /**
  * UVC camera platform.
  */
-/* package-private */ class UvcCameraPlatform {
+public class UvcCameraPlatform {
 
     /**
      * Log tag
@@ -120,10 +122,10 @@ import io.flutter.view.TextureRegistry;
      */
     private final Map<Integer, UvcCameraResources> camerasResources = new ConcurrentHashMap<>();
 
-    private final LivePushPlugin livePushPlugin;
 
-    private VideoCodec videoCodec;
-//    private VideoCodec_bak videoCodec_bak;
+    private RtmpStream genericStream;
+
+    private RtmpEventStreamHandler rtmpEventStreamHandler;
 
     /**
      * Constructs a new {@link UvcCameraPlatform} instance
@@ -136,17 +138,28 @@ import io.flutter.view.TextureRegistry;
             final @NonNull Context applicationContext,
             final @NonNull BinaryMessenger binaryMessenger,
             final @NonNull TextureRegistry textureRegistry,
-            final @NonNull UvcCameraDeviceEventStreamHandler deviceEventStreamHandler,
-            final @NonNull LivePushPlugin livePushPlugin
+            final @NonNull UvcCameraDeviceEventStreamHandler deviceEventStreamHandler
     ) {
         this.applicationContext = new WeakReference<>(applicationContext);
         this.binaryMessenger = new WeakReference<>(binaryMessenger);
         this.textureRegistry = textureRegistry;
         this.deviceEventStreamHandler = deviceEventStreamHandler;
-        this.livePushPlugin = livePushPlugin;
 
         usbMonitor = new USBMonitor(applicationContext, new UvcCameraDeviceMonitorListener(this));
         usbMonitor.register();
+
+        // 初始化Rtmp相关
+        RtmpConnectChecker connectChecker = new RtmpConnectChecker();
+        genericStream = new RtmpStream(applicationContext, connectChecker);
+        genericStream.getStreamClient().setLogs(false);
+        connectChecker.setRtmpStream(genericStream);
+        genericStream.setFpsListener(connectChecker);
+
+        final var rtmpEventChannel = new EventChannel(binaryMessenger, "uvccamera/rtmp_events");
+        final var rtmpEventStreamHandler = new RtmpEventStreamHandler();
+        rtmpEventChannel.setStreamHandler(rtmpEventStreamHandler);
+        // 设置事件处理器到连接检查器
+        connectChecker.setRtmpEventStreamHandler(rtmpEventStreamHandler);
     }
 
     /**
@@ -387,7 +400,7 @@ import io.flutter.view.TextureRegistry;
      * @param maxFps           the maximum frame rate
      * @return camera ID
      */
-    public int openCamera(final @NonNull String deviceName, final int desiredFrameArea,@Nullable Integer maxFps) {
+    public int openCamera(final @NonNull String deviceName, final int desiredFrameArea, @Nullable Integer maxFps) {
         Log.v(TAG, "openCamera: deviceName=" + deviceName + ", desiredFrameArea=" + desiredFrameArea);
 
         final var device = findDeviceByName(deviceName);
@@ -464,7 +477,7 @@ import io.flutter.view.TextureRegistry;
             throw new IllegalStateException("Failed to set button callback", e);
         }
 
-        if(maxFps == null){
+        if (maxFps == null) {
             maxFps = (int) desiredFrameSize.fps[desiredFrameSize.frameIntervalIndex];
         }
 
@@ -1218,23 +1231,109 @@ import io.flutter.view.TextureRegistry;
             throw new IllegalArgumentException("Camera resources not found: " + cameraId);
         }
 
-        AlivcLivePusher alivcLivePusher = livePushPlugin.getLivePusher().getAlivcLivePusher();
         UVCCamera camera = cameraResources.camera();
 
-        videoCodec = new VideoCodec(applicationContext.get(), camera, alivcLivePusher);
-        videoCodec.startEncoding();
+        Context context = applicationContext.get();
+        if (context == null) {
+            Log.e(TAG, "Application context is null");
+            return;
+        }
 
-//        videoCodec_bak = new VideoCodec_bak(applicationContext.get(), camera, alivcLivePusher);
-//        videoCodec_bak.startEncoding();
+        genericStream.getGlInterface().setAutoHandleOrientation(false);
+        genericStream.getStreamClient().setBitrateExponentialFactor(0.5f);
+        genericStream.getStreamClient().forceIncrementalTs(true);
+        genericStream.changeVideoSource(new CameraUvcSource(camera));
+        genericStream.changeAudioSource(new NoAudioSource());
+        genericStream.getStreamClient().setOnlyVideo(true);
 
-        alivcLivePusher.startPush(pushUrl);
+        Size previewSize = camera.getPreviewSize();
+        int fps = (int) previewSize.fps[previewSize.frameIntervalIndex];
+
+        // 对于高帧率，设置更频繁的关键帧
+        int keyFrameInterval = fps <= 60 ? 2 : 1; // 高帧率时每秒一个关键帧
+
+        try {
+            // 根据分辨率和帧率计算合适的码率
+            int videoBitrate = calculateBitrate(previewSize.width, previewSize.height, fps);
+
+            genericStream.prepareVideo(previewSize.width, previewSize.height, videoBitrate, fps, keyFrameInterval, 0);
+            genericStream.prepareAudio(32000, true, 128 * 1000);
+
+            genericStream.setOrientation(0);
+
+            genericStream.getStreamClient().setReTries(10);
+        } catch (IllegalArgumentException e) {
+            e.printStackTrace();
+        }
+
+        genericStream.startStream(pushUrl);
     }
 
     public void stopPush() {
-        AlivcLivePusher alivcLivePusher = livePushPlugin.getLivePusher().getAlivcLivePusher();
+        Log.d(TAG, "stopPush: 准备停止推流");
+        genericStream.stopStream();
+    }
 
-        alivcLivePusher.stopPush();
-        videoCodec.stopEncoding();
-//        videoCodec_bak.stopEncoding();
+    /**
+     * 根据视频分辨率和帧率计算合适的码率
+     *
+     * @param width  视频宽度
+     * @param height 视频高度
+     * @param fps    视频帧率
+     * @return 推荐的码率（比特/秒）
+     */
+    private int calculateBitrate(int width, int height, int fps) {
+        // 基础码率计算公式：宽 * 高 * 帧率 * 系数
+        double pixelCount = width * height;
+        double bitrateFactor;
+
+        // 根据分辨率范围调整系数
+        if (pixelCount <= 320 * 240) { // 低分辨率
+            bitrateFactor = 0.1;
+        } else if (pixelCount <= 640 * 480) { // 480p
+            bitrateFactor = 0.08;
+        } else if (pixelCount <= 1280 * 720) { // 720p
+            bitrateFactor = 0.07;
+        } else if (pixelCount <= 1920 * 1080) { // 1080p
+            bitrateFactor = 0.06;
+        } else { // 超高分辨率
+            bitrateFactor = 0.05;
+        }
+
+        // 对高帧率进行更激进的调整
+        double fpsAdjustment;
+        if (fps <= 30) {
+            fpsAdjustment = 1.0;
+        } else if (fps <= 60) {
+            fpsAdjustment = 1.5;
+        } else if (fps <= 120) {
+            fpsAdjustment = 2.5; // 120fps需要更高的码率
+        } else {
+            fpsAdjustment = 4.0; // 240fps需要显著更高的码率
+        }
+
+        // 计算码率（比特/秒）
+        int bitrate = (int) (pixelCount * bitrateFactor * fpsAdjustment);
+
+        // 为高帧率设置更高的下限
+        int minBitrate;
+        if (fps <= 30) {
+            minBitrate = 500 * 1000; // 500Kbps
+        } else if (fps <= 60) {
+            minBitrate = 1000 * 1000; // 1Mbps
+        } else if (fps <= 120) {
+            minBitrate = 2000 * 1000; // 2Mbps
+        } else {
+            minBitrate = 4000 * 1000; // 4Mbps
+        }
+
+        int maxBitrate = 12000 * 1000; // 提高上限到12Mbps
+
+        int calculatedBitrate = Math.max(minBitrate, Math.min(bitrate, maxBitrate));
+
+        // Log.d(TAG, "calculateBitrate: 分辨率=" + width + "x" + height +
+        //       ", 帧率=" + fps + ", 计算码率=" + calculatedBitrate + "bps");
+
+        return calculatedBitrate;
     }
 }

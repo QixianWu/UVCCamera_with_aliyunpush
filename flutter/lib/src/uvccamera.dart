@@ -1,6 +1,7 @@
 import 'uvccamera_device.dart';
 import 'uvccamera_device_event.dart';
 import 'uvccamera_platform_interface.dart';
+import 'uvccamera_rtmp_event.dart';
 
 /// UVC Camera plugin
 class UvcCamera {
@@ -22,5 +23,9 @@ class UvcCamera {
   /// Device event stream.
   static Stream<UvcCameraDeviceEvent> get deviceEventStream {
     return UvcCameraPlatformInterface.instance.deviceEventStream;
+  }
+
+  static Stream<UvcCameraRtmpEvent> get rtmpEventStream {
+    return UvcCameraPlatformInterface.instance.rtmpEventStream;
   }
 }

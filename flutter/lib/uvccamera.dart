@@ -23,3 +23,5 @@ export 'src/uvccamera_status.dart' show UvcCameraStatus;
 export 'src/uvccamera_status_attribute.dart' show UvcCameraStatusAttribute;
 export 'src/uvccamera_status_class.dart' show UvcCameraStatusClass;
 export 'src/uvccamera_status_event.dart' show UvcCameraStatusEvent;
+export 'src/uvccamera_rtmp_event.dart' show UvcCameraRtmpEvent;
+export 'src/uvccamera_rtmp_type.dart' show UvcCameraRtmpType;
