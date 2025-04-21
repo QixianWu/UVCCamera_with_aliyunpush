@@ -15,7 +15,7 @@ import com.pedro.library.util.FpsListener;
  */
 public class RtmpConnectChecker implements ConnectChecker, FpsListener.Callback {
 
-    private RtmpStream genericStream;
+    private CustomRtmpStream genericStream;
 
     private RtmpEventStreamHandler rtmpEventStreamHandler;
 
@@ -84,8 +84,9 @@ public class RtmpConnectChecker implements ConnectChecker, FpsListener.Callback 
      * 设置 RTMP 流
      * @param stream RTMP 流
      */
-    public void setRtmpStream(RtmpStream stream) {
+    public void setRtmpStream(CustomRtmpStream stream) {
         this.genericStream = stream;
+
     }
 
     public void setRtmpEventStreamHandler(RtmpEventStreamHandler rtmpEventStreamHandler) {

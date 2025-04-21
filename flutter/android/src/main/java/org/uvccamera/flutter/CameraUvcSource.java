@@ -57,4 +57,6 @@ public class CameraUvcSource extends VideoSource {
     public boolean isRunning() {
         return running;
     }
+
+
 }

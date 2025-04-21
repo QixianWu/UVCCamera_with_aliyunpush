@@ -21,6 +21,7 @@ import androidx.annotation.Nullable;
 import com.pedro.encoder.input.sources.audio.NoAudioSource;
 import com.pedro.encoder.input.sources.video.Camera2Source;
 import com.pedro.common.ConnectChecker;
+import com.pedro.library.base.recording.RecordController;
 import com.pedro.library.rtmp.RtmpStream;
 import com.pedro.library.util.FpsListener;
 import com.serenegiant.usb.Size;
@@ -123,7 +124,7 @@ public class UvcCameraPlatform {
     private final Map<Integer, UvcCameraResources> camerasResources = new ConcurrentHashMap<>();
 
 
-    private RtmpStream genericStream;
+    private final CustomRtmpStream genericStream;
 
     private RtmpEventStreamHandler rtmpEventStreamHandler;
 
@@ -150,7 +151,7 @@ public class UvcCameraPlatform {
 
         // 初始化Rtmp相关
         RtmpConnectChecker connectChecker = new RtmpConnectChecker();
-        genericStream = new RtmpStream(applicationContext, connectChecker);
+        genericStream = new CustomRtmpStream(applicationContext, connectChecker);
         genericStream.getStreamClient().setLogs(false);
         connectChecker.setRtmpStream(genericStream);
         genericStream.setFpsListener(connectChecker);
@@ -566,6 +567,35 @@ public class UvcCameraPlatform {
                 mediaRecorder
         ));
 
+        // rtmp推流初始化
+        genericStream.getGlInterface().setAutoHandleOrientation(false);
+        genericStream.getStreamClient().setBitrateExponentialFactor(0.5f);
+        genericStream.getStreamClient().forceIncrementalTs(true);
+        genericStream.changeVideoSource(new CameraUvcSource(camera));
+        genericStream.changeAudioSource(new NoAudioSource());
+        genericStream.getStreamClient().setOnlyVideo(true);
+
+        Size previewSize = camera.getPreviewSize();
+        int fps = (int) previewSize.fps[previewSize.frameIntervalIndex];
+
+        // 对于高帧率，设置更频繁的关键帧
+        int keyFrameInterval = fps <= 60 ? 2 : 1; // 高帧率时每秒一个关键帧
+
+        try {
+            // 根据分辨率和帧率计算合适的码率
+            int videoBitrate = calculateBitrate(previewSize.width, previewSize.height, fps);
+
+            genericStream.prepareVideo(previewSize.width, previewSize.height, videoBitrate, fps, keyFrameInterval);
+            genericStream.prepareAudio(32000, true, 128 * 1000);
+
+            genericStream.setOrientation(0);
+
+            genericStream.getStreamClient().setReTries(10);
+
+        } catch (IllegalArgumentException e) {
+            e.printStackTrace();
+        }
+
         return cameraId;
     }
 
@@ -576,6 +606,9 @@ public class UvcCameraPlatform {
      */
     public void closeCamera(final int cameraId) {
         Log.v(TAG, "closeCamera: cameraId=" + cameraId);
+
+        // 释放rtmp推流
+        genericStream.release();
 
         final var cameraResources = camerasResources.remove(cameraId);
         if (cameraResources == null) {
@@ -1149,9 +1182,9 @@ public class UvcCameraPlatform {
         if (applicationContext == null) {
             throw new IllegalStateException("applicationContext reference has expired");
         }
-
-        final var mediaRecorder = cameraResources.mediaRecorder();
-        mediaRecorder.reset();
+//
+//        final var mediaRecorder = cameraResources.mediaRecorder();
+//        mediaRecorder.reset();
 
         final var outputDir = applicationContext.getCacheDir();
         final File outputFile;
@@ -1161,29 +1194,41 @@ public class UvcCameraPlatform {
             throw new IllegalStateException("Failed to create video recording file", e);
         }
 
-        mediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
-        mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
-        mediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
-        mediaRecorder.setVideoSize(frameWidth, frameHeight);
-        mediaRecorder.setVideoFrameRate(30);
-        mediaRecorder.setOutputFile(outputFile.getAbsolutePath());
+//        mediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
+//        mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+//        mediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
+//        mediaRecorder.setVideoSize(frameWidth, frameHeight);
+//        mediaRecorder.setVideoFrameRate(30);
+//        mediaRecorder.setOutputFile(outputFile.getAbsolutePath());
+//
+//        try {
+//            mediaRecorder.prepare();
+//        } catch (IOException e) {
+//            mediaRecorder.reset();
+//
+//            throw new IllegalStateException("Failed to prepare media recorder", e);
+//        }
+//
+//        try {
+//            final var mediaRecorderSurface = mediaRecorder.getSurface();
+//            cameraResources.camera().startCapture(mediaRecorderSurface);
+//            mediaRecorder.start();
+//        } catch (final Exception e) {
+//            mediaRecorder.reset();
+//
+//            throw new IllegalStateException("Failed to start capture", e);
+//        }
 
+        // 改用推流器的录像
         try {
-            mediaRecorder.prepare();
+            genericStream.startRecord(outputFile.getPath(), new RecordController.Listener() {
+                @Override
+                public void onStatusChange(RecordController.Status status) {
+
+                }
+            });
         } catch (IOException e) {
-            mediaRecorder.reset();
-
-            throw new IllegalStateException("Failed to prepare media recorder", e);
-        }
-
-        try {
-            final var mediaRecorderSurface = mediaRecorder.getSurface();
-            cameraResources.camera().startCapture(mediaRecorderSurface);
-            mediaRecorder.start();
-        } catch (final Exception e) {
-            mediaRecorder.reset();
-
-            throw new IllegalStateException("Failed to start capture", e);
+            throw new RuntimeException(e);
         }
 
         return outputFile;
@@ -1202,11 +1247,13 @@ public class UvcCameraPlatform {
             throw new IllegalArgumentException("Camera resources not found: " + cameraId);
         }
 
-        cameraResources.camera().stopCapture();
+//        cameraResources.camera().stopCapture();
+//
+//        final var mediaRecorder = cameraResources.mediaRecorder();
+//        mediaRecorder.stop();
+//        mediaRecorder.reset();
 
-        final var mediaRecorder = cameraResources.mediaRecorder();
-        mediaRecorder.stop();
-        mediaRecorder.reset();
+        genericStream.stopRecord();
     }
 
     /**
@@ -1237,33 +1284,6 @@ public class UvcCameraPlatform {
         if (context == null) {
             Log.e(TAG, "Application context is null");
             return;
-        }
-
-        genericStream.getGlInterface().setAutoHandleOrientation(false);
-        genericStream.getStreamClient().setBitrateExponentialFactor(0.5f);
-        genericStream.getStreamClient().forceIncrementalTs(true);
-        genericStream.changeVideoSource(new CameraUvcSource(camera));
-        genericStream.changeAudioSource(new NoAudioSource());
-        genericStream.getStreamClient().setOnlyVideo(true);
-
-        Size previewSize = camera.getPreviewSize();
-        int fps = (int) previewSize.fps[previewSize.frameIntervalIndex];
-
-        // 对于高帧率，设置更频繁的关键帧
-        int keyFrameInterval = fps <= 60 ? 2 : 1; // 高帧率时每秒一个关键帧
-
-        try {
-            // 根据分辨率和帧率计算合适的码率
-            int videoBitrate = calculateBitrate(previewSize.width, previewSize.height, fps);
-
-            genericStream.prepareVideo(previewSize.width, previewSize.height, videoBitrate, fps, keyFrameInterval, 0);
-            genericStream.prepareAudio(32000, true, 128 * 1000);
-
-            genericStream.setOrientation(0);
-
-            genericStream.getStreamClient().setReTries(10);
-        } catch (IllegalArgumentException e) {
-            e.printStackTrace();
         }
 
         genericStream.startStream(pushUrl);
