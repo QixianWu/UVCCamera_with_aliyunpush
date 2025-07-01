@@ -75,7 +75,7 @@ UVCPreview::UVCPreview(uvc_device_handle_t *devh)
 //
 	pthread_cond_init(&capture_sync, NULL);
 	pthread_mutex_init(&capture_mutex, NULL);
-//	
+//
 	pthread_mutex_init(&pool_mutex, NULL);
 	EXIT();
 }
@@ -169,7 +169,7 @@ inline const bool UVCPreview::isRunning() const {return mIsRunning; }
 
 int UVCPreview::setPreviewSize(int width, int height, int min_fps, int max_fps, int mode, float bandwidth) {
 	ENTER();
-	
+
 	int result = 0;
 	if ((requestWidth != width) || (requestHeight != height) || (requestMode != mode)) {
 		requestWidth = width;
@@ -184,7 +184,7 @@ int UVCPreview::setPreviewSize(int width, int height, int min_fps, int max_fps, 
 			!requestMode ? UVC_FRAME_FORMAT_YUYV : UVC_FRAME_FORMAT_MJPEG,
 			requestWidth, requestHeight, requestMinFps, requestMaxFps);
 	}
-	
+
 	RETURN(result, int);
 }
 
@@ -207,7 +207,7 @@ int UVCPreview::setPreviewDisplay(ANativeWindow *preview_window) {
 }
 
 int UVCPreview::setFrameCallback(JNIEnv *env, jobject frame_callback_obj, int pixel_format) {
-	
+
 	ENTER();
 	pthread_mutex_lock(&capture_mutex);
 	{
@@ -598,25 +598,23 @@ int copyToSurface(uvc_frame_t *frame, ANativeWindow **window) {
 	int result = 0;
 	if (LIKELY(*window)) {
 		ANativeWindow_Buffer buffer;
-		if (LIKELY(ANativeWindow_lock(*window, &buffer, NULL) == 0)) {
-			// source = frame data
-			const uint8_t *src = (uint8_t *)frame->data;
-			const int src_w = frame->width * PREVIEW_PIXEL_BYTES;
-			const int src_step = frame->width * PREVIEW_PIXEL_BYTES;
-			// destination = Surface(ANativeWindow)
-			uint8_t *dest = (uint8_t *)buffer.bits;
-			const int dest_w = buffer.width * PREVIEW_PIXEL_BYTES;
-			const int dest_step = buffer.stride * PREVIEW_PIXEL_BYTES;
-			// use lower transfer bytes
-			const int w = src_w < dest_w ? src_w : dest_w;
-			// use lower height
-			const int h = frame->height < buffer.height ? frame->height : buffer.height;
-			// transfer from frame data to the Surface
-			copyFrame(src, dest, w, h, src_step, dest_step);
-			ANativeWindow_unlockAndPost(*window);
-		} else {
-			result = -1;
-		}
+        if (LIKELY(ANativeWindow_lock(*window, &buffer, NULL) == 0)) {
+
+            if (frame->width >= buffer.stride) {
+                memcpy(buffer.bits, frame->data,
+                       buffer.width * buffer.height * PREVIEW_PIXEL_BYTES);
+            } else {
+                for (int i = 0; i < buffer.height; i++) {
+                    memcpy((uint8_t *) buffer.bits + i * buffer.stride * PREVIEW_PIXEL_BYTES,
+                           (uint8_t *) frame->data + i * buffer.width * PREVIEW_PIXEL_BYTES,
+                           buffer.width * PREVIEW_PIXEL_BYTES);
+                }
+            }
+
+            ANativeWindow_unlockAndPost(*window);
+        } else {
+            result = -1;
+        }
 	} else {
 		result = -1;
 	}
@@ -793,11 +791,11 @@ void UVCPreview::do_capture(JNIEnv *env) {
 
 void UVCPreview::do_capture_idle_loop(JNIEnv *env) {
 	ENTER();
-	
+
 	for (; isRunning() && isCapturing() ;) {
 		do_capture_callback(env, waitCaptureFrame());
 	}
-	
+
 	EXIT();
 }
 
@@ -867,7 +865,9 @@ void UVCPreview::do_capture_callback(JNIEnv *env, uvc_frame_t *frame) {
 				}
 			}
 			jobject buf = env->NewDirectByteBuffer(callback_frame->data, callbackPixelBytes);
-			env->CallVoidMethod(mFrameCallbackObj, iframecallback_fields.onFrame, buf);
+            if( iframecallback_fields.onFrame){
+                env->CallVoidMethod(mFrameCallbackObj, iframecallback_fields.onFrame, buf);
+            }
 			env->ExceptionClear();
 			env->DeleteLocalRef(buf);
 		}
