@@ -159,15 +159,37 @@ import io.flutter.plugin.common.MethodChannel;
                 }
 
                 final var mode = call.<Map<String, Object>>argument("mode");
-                Integer maxFps = null;
+                Size frameSize = null;
+                //
                 if(mode != null){
                     try {
                         int width = (Integer) mode.get("frameWidth");
                         int height = (Integer) mode.get("frameHeight");
                         List<Double> fpsList = (List<Double>) mode.get("fps");
                         int frameIntervalIndex = (Integer) mode.get("frameIntervalIndex");
+
+                        // 生成对应的intervals列表
+                        int[] intervals = null;
+                        if (fpsList != null && !fpsList.isEmpty()) {
+                            intervals = new int[fpsList.size()];
+                            for (int i = 0; i < fpsList.size(); i++) {
+                                // 使用10000000除以fps得到interval值
+                                intervals[i] = (int)(10000000.0f / fpsList.get(i).intValue());
+                            }
+                        }
                         desiredFrameArea = width * height;
-                        maxFps = fpsList.get(frameIntervalIndex).intValue();
+                        final var formatType = (String) mode.get("frameFormat");
+                        final var formatTypeValue = FRAME_FORMAT_ENUM_NAME_TO_LIBUVC_VALUE.get(formatType);
+
+                        frameSize = new Size(
+                                formatTypeValue,
+                                0,
+                                -1,
+                                width,
+                                height,
+                                intervals
+                        );
+                        frameSize.setCurrentFrameRate(fpsList.get(frameIntervalIndex).floatValue());
                     }catch (Exception e){
                         e.printStackTrace();
                     }
@@ -175,7 +197,7 @@ import io.flutter.plugin.common.MethodChannel;
 
                 long cameraId;
                 try {
-                    cameraId = uvcCameraPlatform.openCamera(deviceName, desiredFrameArea, maxFps);
+                    cameraId = uvcCameraPlatform.openCamera(deviceName, desiredFrameArea, frameSize);
                 } catch (final Exception e) {
                     result.error(e.getClass().getSimpleName(), e.getMessage(), null);
                     return;

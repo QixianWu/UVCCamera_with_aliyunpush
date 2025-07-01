@@ -201,7 +201,7 @@ public class Size implements Parcelable {
 		int index = -1;
 		final int n = fps != null ? fps.length : 0;
 		for (int i = 0; i < n; i++) {
-			if (fps[i] <= frameRate) {
+			if ((int)fps[i] <= frameRate) {
 				index = i;
 				break;
 			}

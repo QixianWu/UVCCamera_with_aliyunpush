@@ -398,10 +398,10 @@ public class UvcCameraPlatform {
      *
      * @param deviceName       the name of the UVC camera device
      * @param desiredFrameArea the desired frame area
-     * @param maxFps           the maximum frame rate
+     * @param desiredPreviewSize  the desired preview size
      * @return camera ID
      */
-    public int openCamera(final @NonNull String deviceName, final int desiredFrameArea, @Nullable Integer maxFps) {
+    public int openCamera(final @NonNull String deviceName, final int desiredFrameArea, @Nullable Size desiredPreviewSize) {
         Log.v(TAG, "openCamera: deviceName=" + deviceName + ", desiredFrameArea=" + desiredFrameArea);
 
         final var device = findDeviceByName(deviceName);
@@ -478,27 +478,36 @@ public class UvcCameraPlatform {
             throw new IllegalStateException("Failed to set button callback", e);
         }
 
-        if (maxFps == null) {
-            maxFps = (int) desiredFrameSize.fps[desiredFrameSize.frameIntervalIndex];
-        }
-
         // Set the preview size and the frame format
         Log.d(TAG, "openCamera: setting preview size and frame format");
         Integer frameFormat = null;
-        for (final var desiredFrameFormat : List.of(UVCCamera.FRAME_FORMAT_MJPEG, UVCCamera.FRAME_FORMAT_YUYV)) {
-            try {
-                camera.setPreviewSize(
-                        desiredFrameSize.width,
-                        desiredFrameSize.height,
-                        UVCCamera.DEFAULT_PREVIEW_MIN_FPS,
-                        maxFps,
-                        desiredFrameFormat,
-                        UVCCamera.DEFAULT_BANDWIDTH
-                );
-                frameFormat = desiredFrameFormat;
-                break;
-            } catch (final IllegalArgumentException e) {
-                Log.w(TAG, "Unsupported frame format: " + desiredFrameFormat);
+
+        if(desiredPreviewSize != null){
+            frameFormat = desiredPreviewSize.type == 4 ? UVCCamera.FRAME_FORMAT_YUYV : UVCCamera.FRAME_FORMAT_MJPEG;
+            camera.setPreviewSize(
+                    desiredFrameSize.width,
+                    desiredFrameSize.height,
+                    UVCCamera.DEFAULT_PREVIEW_MIN_FPS,
+                    desiredPreviewSize.fps[desiredPreviewSize.frameIntervalIndex],
+                    frameFormat,
+                    UVCCamera.DEFAULT_BANDWIDTH
+            );
+        }else{
+            for (final var desiredFrameFormat : List.of(UVCCamera.FRAME_FORMAT_MJPEG, UVCCamera.FRAME_FORMAT_YUYV)) {
+                try {
+                    camera.setPreviewSize(
+                            desiredFrameSize.width,
+                            desiredFrameSize.height,
+                            UVCCamera.DEFAULT_PREVIEW_MIN_FPS,
+                            desiredFrameSize.fps[desiredFrameSize.frameIntervalIndex],
+                            desiredFrameFormat,
+                            UVCCamera.DEFAULT_BANDWIDTH
+                    );
+                    frameFormat = desiredFrameFormat;
+                    break;
+                } catch (final IllegalArgumentException e) {
+                    Log.w(TAG, "Unsupported frame format: " + desiredFrameFormat);
+                }
             }
         }
         if (frameFormat == null) {
