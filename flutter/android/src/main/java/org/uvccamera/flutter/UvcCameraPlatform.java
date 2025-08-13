@@ -1304,7 +1304,8 @@ public class UvcCameraPlatform {
     }
 
     /**
-     * 根据视频分辨率和帧率计算合适的码率
+     * 计算动态码率 - 重构版本
+     * 基于行业标准和最佳实践，提供更精确的码率计算
      *
      * @param width  视频宽度
      * @param height 视频高度
@@ -1312,57 +1313,145 @@ public class UvcCameraPlatform {
      * @return 推荐的码率（比特/秒）
      */
     private int calculateBitrate(int width, int height, int fps) {
-        // 基础码率计算公式：宽 * 高 * 帧率 * 系数
-        double pixelCount = width * height;
-        double bitrateFactor;
+        // 计算像素总数
+        long pixelCount = (long) width * height;
 
-        // 根据分辨率范围调整系数
-        if (pixelCount <= 320 * 240) { // 低分辨率
-            bitrateFactor = 0.1;
-        } else if (pixelCount <= 640 * 480) { // 480p
-            bitrateFactor = 0.08;
-        } else if (pixelCount <= 1280 * 720) { // 720p
-            bitrateFactor = 0.07;
-        } else if (pixelCount <= 1920 * 1080) { // 1080p
-            bitrateFactor = 0.06;
-        } else { // 超高分辨率
-            bitrateFactor = 0.05;
-        }
+        // 基于分辨率的基础码率（每像素比特数）
+        double bitsPerPixel = getBitsPerPixel(pixelCount);
 
-        // 对高帧率进行更激进的调整
-        double fpsAdjustment;
-        if (fps <= 30) {
-            fpsAdjustment = 1.0;
-        } else if (fps <= 60) {
-            fpsAdjustment = 1.5;
-        } else if (fps <= 120) {
-            fpsAdjustment = 2.5; // 120fps需要更高的码率
+        // 帧率系数 - 使用更平滑的曲线
+        double fpsMultiplier = calculateFpsMultiplier(fps);
+
+        // 复杂度系数 - 考虑编码复杂度
+        double complexityFactor = getComplexityFactor(width, height);
+
+        // 基础码率计算
+        double baseBitrate = pixelCount * bitsPerPixel * fpsMultiplier * complexityFactor;
+
+        // 应用质量调整
+        int targetBitrate = (int) (baseBitrate * getQualityFactor());
+
+        // 应用合理的边界限制
+        return applyBitrateBounds(targetBitrate, width, height, fps);
+    }
+
+    /**
+     * 根据像素数量获取每像素比特数
+     */
+    private double getBitsPerPixel(long pixelCount) {
+        if (pixelCount <= 76800) { // 320x240
+            return 0.15; // 低分辨率需要更高的每像素比特数保证质量
+        } else if (pixelCount <= 307200) { // 640x480
+            return 0.12;
+        } else if (pixelCount <= 921600) { // 1280x720
+            return 0.10;
+        } else if (pixelCount <= 2073600) { // 1920x1080
+            return 0.08;
+        } else if (pixelCount <= 8294400) { // 3840x2160 (4K)
+            return 0.06;
         } else {
-            fpsAdjustment = 4.0; // 240fps需要显著更高的码率
+            return 0.04; // 8K及以上
         }
+    }
 
-        // 计算码率（比特/秒）
-        int bitrate = (int) (pixelCount * bitrateFactor * fpsAdjustment);
-
-        // 为高帧率设置更高的下限
-        int minBitrate;
-        if (fps <= 30) {
-            minBitrate = 500 * 1000; // 500Kbps
+    /**
+     * 计算帧率系数 - 使用更平滑的增长曲线
+     */
+    private double calculateFpsMultiplier(int fps) {
+        if (fps <= 15) {
+            return 0.8; // 低帧率可以适当降低码率
+        } else if (fps <= 30) {
+            return 1.0; // 标准帧率基准
         } else if (fps <= 60) {
-            minBitrate = 1000 * 1000; // 1Mbps
+            // 30-60fps之间线性增长
+            return 1.0 + (fps - 30) * 0.02; // 每增加1fps增加2%
         } else if (fps <= 120) {
-            minBitrate = 2000 * 1000; // 2Mbps
+            // 60-120fps之间适度增长
+            return 1.6 + (fps - 60) * 0.015; // 每增加1fps增加1.5%
         } else {
-            minBitrate = 4000 * 1000; // 4Mbps
+            // 120fps以上缓慢增长，避免码率过高
+            return 2.5 + Math.log(fps / 120.0) * 0.5;
         }
+    }
 
-        int maxBitrate = 12000 * 1000; // 提高上限到12Mbps
+    /**
+     * 获取复杂度系数 - 考虑宽高比和编码复杂度
+     */
+    private double getComplexityFactor(int width, int height) {
+        double aspectRatio = (double) width / height;
 
-        int calculatedBitrate = Math.max(minBitrate, Math.min(bitrate, maxBitrate));
+        // 标准宽高比(16:9, 4:3)编码效率更高
+        if (Math.abs(aspectRatio - 16.0/9.0) < 0.1 || Math.abs(aspectRatio - 4.0/3.0) < 0.1) {
+            return 0.95; // 标准宽高比可以降低5%码率
+        } else if (aspectRatio > 2.5 || aspectRatio < 0.5) {
+            return 1.15; // 极端宽高比需要更高码率
+        } else {
+            return 1.0; // 其他宽高比保持标准
+        }
+    }
 
-        // Log.d(TAG, "calculateBitrate: 分辨率=" + width + "x" + height +
-        //       ", 帧率=" + fps + ", 计算码率=" + calculatedBitrate + "bps");
+    /**
+     * 获取质量系数 - 可根据需要调整整体质量
+     */
+    private double getQualityFactor() {
+        // 可以根据用户设置或网络状况动态调整
+        // 1.0 = 标准质量, 0.8 = 节省流量, 1.2 = 高质量
+        return 1.0;
+    }
 
-        return calculatedBitrate;
+    /**
+     * 应用码率边界限制
+     */
+    private int applyBitrateBounds(int targetBitrate, int width, int height, int fps) {
+        // 动态计算最小码率 - 确保基本质量
+        int minBitrate = calculateMinBitrate(width, height, fps);
+
+        // 动态计算最大码率 - 避免浪费带宽
+        int maxBitrate = calculateMaxBitrate(width, height, fps);
+
+        int finalBitrate = Math.max(minBitrate, Math.min(targetBitrate, maxBitrate));
+
+//        Log.d(TAG, String.format("calculateBitrate: %dx%d@%dfps -> target: %d, final: %d (range: %d-%d)",
+//                width, height, fps, targetBitrate, finalBitrate, minBitrate, maxBitrate));
+
+        return finalBitrate;
+    }
+
+    /**
+     * 计算最小码率 - 保证基本质量
+     */
+    private int calculateMinBitrate(int width, int height, int fps) {
+        long pixelCount = (long) width * height;
+
+        if (pixelCount <= 76800) { // 320x240
+            return fps <= 15 ? 200_000 : 300_000;
+        } else if (pixelCount <= 307200) { // 640x480
+            return fps <= 30 ? 400_000 : 600_000;
+        } else if (pixelCount <= 921600) { // 1280x720
+            return fps <= 30 ? 800_000 : 1_200_000;
+        } else if (pixelCount <= 2073600) { // 1920x1080
+            return fps <= 30 ? 1_500_000 : 2_500_000;
+        } else { // 4K及以上
+            return fps <= 30 ? 4_000_000 : 8_000_000;
+        }
+    }
+
+    /**
+     * 计算最大码率 - 避免浪费带宽
+     */
+    private int calculateMaxBitrate(int width, int height, int fps) {
+        long pixelCount = (long) width * height;
+
+        if (pixelCount <= 76800) { // 320x240
+            return 1_000_000;
+        } else if (pixelCount <= 307200) { // 640x480
+            return 2_500_000;
+        } else if (pixelCount <= 921600) { // 1280x720
+            return fps <= 60 ? 6_000_000 : 10_000_000;
+        } else if (pixelCount <= 2073600) { // 1920x1080
+            return fps <= 60 ? 12_000_000 : 20_000_000;
+        } else { // 4K及以上
+            return fps <= 60 ? 25_000_000 : 50_000_000;
+        }
     }
 }
